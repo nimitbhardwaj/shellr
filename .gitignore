@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual env
+.venv/
+venv/
+
+# Secrets — never commit these
+.shellr_secret
+*.secret
+
+# Local state
+.state/
+*.log
+!share/boot/*.sh
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Build artefacts from /data/local/tmp sync
+/share/phone/*.bak
