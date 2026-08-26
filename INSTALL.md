@@ -56,60 +56,40 @@ pkg install python        # python3 binary
 (Do NOT install `termux-bluetooth-scan` — that package does not exist.
 BT scanning works through **Termux:API**. See below.)
 
-### 2c. Bootstrap the daemon over ADB
+### 2c. Run the single-file installer (recommended)
 
-Plug the phone in via USB, enable USB debugging, then from the
-controller:
+The simplest path. From the controller (or any laptop connected
+to the phone via ADB):
 
 ```bash
-# 1. adb public key exchange (one-time per host)
-adb devices                          # confirm phone shows up
+# Push the installer once — it's self-extracting and bundles
+# the entire daemon source as a heredoc.
+adb push ~/shellr/share/phone/install.sh /sdcard/install.sh
 
-# 2. Push the current daemon source to /data/local/tmp/shellrd/
-adb shell 'mkdir -p /data/local/tmp/shellrd'
-adb push ~/shellr/src/shellr/daemon/__init__.py /data/local/tmp/shellrd/shellrd.py
-adb shell 'chmod 700 /data/local/tmp/shellrd/shellrd.py'
+# Run it as root. Use ADB's su wrapper, OR open a Termux app
+# shell, `su`, then `bash /sdcard/install.sh`.
+adb shell 'su -c "bash /sdcard/install.sh"'
+```
 
-# 3. Push the autostart (KernelSU service.d)
-adb shell 'mkdir -p /data/adb/service.d'
-adb push ~/shellr/share/boot/service.d-shellrd.sh /data/adb/service.d/shellrd.sh
-adb shell 'chmod 755 /data/adb/service.d/shellrd.sh'
+The installer will, in order:
 
-# 4. Generate (or push) the matching HMAC secret.
-# Easiest: have the phone generate and you copy paste to the controller.
-adb shell 'mkdir -p /data/local/tmp/shellrd'
-adb shell "python3 -c 'import secrets; print(secrets.token_hex(32))' > /data/local/tmp/shellrd/.shellr_secret"
-adb shell 'chmod 600 /data/local/tmp/shellrd/.shellr_secret'
-adb pull /data/local/tmp/shellrd/.shellr_secret ~/.shellr_secret_vps     # one-time copy
-# CRITICAL: the secret on the phone and on the controller MUST be identical.
-# Either: paste the controller's value into the phone's file
-#   adb push ~/.shellr_secret /data/local/tmp/shellrd/.shellr_secret
-# OR copy the adb-pull file over your controller's secret
-#   cp ~/.shellr_secret_vps ~/.shellr_secret
-# Then:
+1. Verify root + service.d + Termux python3
+2. Write `/data/local/tmp/shellrd/shellrd.py` (bundled daemon)
+3. Write `/data/local/tmp/shellrd/.shellr_secret` (HMAC key, fresh)
+4. Write `/data/adb/service.d/shellrd.sh` (KernelSU autostart)
+5. Start the daemon
+6. Print the **Tailscale IP** AND the **HMAC secret** the
+   controller-side `~/.shellr_secret` must contain
+
+Save the printed secret on the controller:
+
+```bash
+# paste the secret the installer printed (single line, 64 hex chars)
+echo "<paste-secret-here>" > ~/.shellr_secret
 chmod 600 ~/.shellr_secret
 ```
 
-### 2d. Start the daemon
-
-```bash
-# Tell the phone to start now (also auto-starts at every reboot)
-adb shell /data/adb/service.d/shellrd.sh
-
-# Confirm the daemon is bound and listening
-adb shell 'cat /sdcard/shellr.log | tail -10'
-```
-
-You should see:
-
-```
-[shellrd] python3: /data/data/com.termux/files/usr/bin/python3
-[shellrd] nmap: /data/data/com.termux/files/usr/bin/nmap   (if installed)
-[shellrd] starting on 100.<your-tailscale-ip>
-[shellrd] started OK
-```
-
-### 2e. Verify from the controller
+### 2d. Verify
 
 ```bash
 shellr --resolve                     # → 100.x.y.z (the phone's tailnet IP)
@@ -117,8 +97,19 @@ shellr ping                          # → {"ok": true, "result": {"pong": true,
 shellr info                          # → kernel, android_sdk, uid, ...
 ```
 
-If `connection refused` or `connection timed out`, see `TROUBLESHOOTING`
-below.
+### 2e. Manual alternative (if you can't ADB push)
+
+If you don't have USB/ADB handy, the installer can also be:
+
+```bash
+# Saved to /sdcard from the phone's browser
+adb shell 'curl -sSL https://raw.githubusercontent.com/nimitbhardwaj/shellr/main/share/phone/install.sh -o /sdcard/install.sh && su -c "bash /sdcard/install.sh"'
+```
+
+But this pulls from the network — install.sh is hermetic by
+default, so prefer the bundled path (2c) where possible.
+
+(Continued: optional tools, uninstall, troubleshooting below.)
 
 ---
 
