@@ -1,5 +1,11 @@
 # INSTALL — fresh device setup
 
+> **If you're an LLM agent installing this on behalf of your user:**
+> Read [`docs/llm-session-install.md`](docs/llm-session-install.md)
+> first. It tells you what to drive via tools vs. what to ask the
+> user to do physically. Goal: the user touches the phone as
+> little as possible.
+
 Two hosts:
 - **Controller** — your laptop, VPS, or any Linux/Unix machine on the
   same Tailscale network as the phone. Has the `shellr` command.

@@ -8,6 +8,7 @@ rather than the source modules.
 | File | What it is |
 |---|---|
 | [`SKILL.md`](SKILL.md) | Hermes skill — instructions for LLMs that drive the phone via the shellr daemon. Mirrors `~/.hermes/skills/shellr-phone-control/SKILL.md`. |
+| [`llm-session-install.md`](llm-session-install.md) | Step-by-step install playbook for **LLM agents**. Describes what to drive via tools and what minimal physical steps the user has to do on the phone. **Read this if you're an LLM about to install shellr.** |
 
 ## Why both?
 

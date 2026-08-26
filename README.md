@@ -13,6 +13,35 @@ VPS ──── HMAC-signed RPC over Tailscale ──── phone (root)
                                        └─ autostart via KernelSU service.d
 ```
 
+## If you're an LLM agent — START HERE
+
+**Don't put your user through shell commands.** Read
+[`docs/llm-session-install.md`](docs/llm-session-install.md) first.
+It tells you exactly what to drive via your tools (ADB push, file
+write, `shellr` package call) and what minimal physical steps the
+user has to do on the phone (USB plug-in, fingerprint tap, F-Droid
+install). Goal: the user has to touch the phone as little as
+possible.
+
+## If you're a human — quickstart
+
+```bash
+git clone https://github.com/nimitbhardwaj/shellr
+cd shellr
+pip install -e ".[dev]"          # adds 'shellr' and 'shellrd' to PATH
+
+# On the phone (rooted, with Termux + Tailscale installed):
+adb push share/phone/install.sh /sdcard/install.sh
+adb shell 'su -c "bash /sdcard/install.sh"'
+
+# Back on the controller: save the secret the installer prints
+# to ~/.shellr_secret, then:
+shellr --resolve
+shellr ping
+```
+
+Full walkthrough in [`INSTALL.md`](INSTALL.md).
+
 ## What you get
 
 | Capability | From your VPS |
