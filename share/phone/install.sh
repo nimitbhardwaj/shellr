@@ -7,9 +7,9 @@
 #
 # What it does:
 #   1. preflight: must be root + service.d present + Termux python3
-#   2. writes /data/local/tmp/shellrd/shellrd.py          (bundled daemon)
-#   3. writes /data/local/tmp/shellrd/.shellr_secret      (HMAC key)
-#   4. writes /data/adb/service.d/shellrd.sh              (autostart)
+#   2. writes /data/adb/shellrd/shellrd.py             (bundled daemon, canonical)
+#   3. writes /data/adb/shellrd/.shellr_secret         (HMAC key)
+#   4. writes /data/adb/service.d/shellrd.sh           (autostart)
 #   5. starts the daemon
 #   6. prints the Tailscale IP + HMAC secret + control commands
 #
@@ -19,7 +19,9 @@
 set -eu
 
 INSTALLER_VERSION="0.2.0"
-PHONE_HOME="/data/local/tmp/shellrd"
+# Canonical home for shellrd on rooted phones is /data/adb/shellrd
+# (KernelSU / Magisk convention — see ALLOWED_ROOTS in config.py).
+PHONE_HOME="/data/adb/shellrd"
 SERVICE_D="/data/adb/service.d"
 
 banner() { printf '\n=== %s ===\n' "$*"; }
@@ -89,6 +91,117 @@ from pathlib import Path
 __version__ = "0.2.0"
 
 
+# ======= ../crypto.py =======
+"""HMAC-SHA256 request signing.
+
+The daemon and the client share a pre-shared secret. Every request body is
+signed; the daemon verifies the signature before dispatching.
+
+Header on the wire: ``X-Shellr-Signature: <hex>``.
+
+The daemon refuses to start if the secret file's permissions are looser than
+``0600`` — defence in depth against accidental world-readable secrets.
+"""
+
+
+import hashlib
+import hmac
+
+
+def sign(secret: bytes, body: bytes) -> str:
+    """Return the hex-encoded HMAC-SHA256 of ``body`` keyed by ``secret``."""
+    return hmac.new(secret, body, hashlib.sha256).hexdigest()
+
+
+def verify(secret: bytes, body: bytes, signature: str) -> bool:
+    """Constant-time signature check."""
+    expected = sign(secret, body)
+    return hmac.compare_digest(expected, signature or "")
+
+
+# ======= ../resolve.py =======
+"""Resolve a Tailscale hostname to its ``100.x.y.z`` tunnel IP.
+
+Strategy (in order):
+
+1. Native DNS resolution via :func:`socket.getaddrinfo` — works on any host
+   that has MagicDNS resolvable (``nimits-a51`` → ``100.x.y.z``).
+2. Local ``tailscale status --json`` lookup — works without DNS if the
+   binary is on PATH and authenticated.
+3. ``tailscale ip -4 <name>`` — last-resort CLI.
+
+Raises :class:`RuntimeError` if nothing works; the caller should pass
+``--phone-ip`` to override.
+"""
+
+
+import json
+import socket
+import subprocess
+from typing import Iterable
+
+
+def resolve_tailscale_ip(
+    name: str,
+    candidates: Iterable[str] | None = None,
+    timeout: float = 5.0,
+) -> str:
+    """Return the Tailscale IPv4 address for ``name`` (e.g. ``nimits-a51``)."""
+    hostnames = list(candidates) if candidates else [name, f"{name}.local"]
+
+    # 1. Native DNS
+    for host in hostnames:
+        try:
+            infos = socket.getaddrinfo(host, None, socket.AF_INET)
+            for family, _type, _proto, _canon, sockaddr in infos:
+                if family == socket.AF_INET and sockaddr[0].startswith("100."):
+                    return sockaddr[0]
+        except socket.gaierror:
+            continue
+
+    # 2. tailscale status --json
+    try:
+        out = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if out.returncode == 0:
+            data = json.loads(out.stdout)
+            for peer in data.get("Peer", {}).values():
+                host_name = peer.get("HostName", "").lower()
+                if host_name == name.lower() or host_name.split(".")[0] == name.lower():
+                    for ip in peer.get("TailscaleIPs", []):
+                        if ip.startswith("100."):
+                            return ip
+            self_status = data.get("Self") or {}
+            for ip in self_status.get("TailscaleIPs", []):
+                if ip.startswith("100."):
+                    return ip
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        pass
+
+    # 3. tailscale ip -4
+    try:
+        out = subprocess.run(
+            ["tailscale", "ip", "-4", name],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip().splitlines()[0]
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    raise RuntimeError(
+        f"could not resolve Tailscale IP for {name!r}. "
+        "Is the host on the tailnet? Is `tailscale` installed? "
+        "Pass --phone-ip to override."
+    )
+
+
 # ======= config.py =======
 """Daemon configuration — defaults, paths, security policy.
 
@@ -100,7 +213,7 @@ Override on the command line via ``--host``, ``--port``, ``--secret``,
 # Bind defaults — refuse to start without an explicit --host.
 DEFAULT_HOST: str | None = None
 DEFAULT_PORT: int = 7777
-DEFAULT_SECRET_PATH: str = "/data/local/tmp/shellrd/.shellr_secret"
+DEFAULT_SECRET_PATH: str = "/data/adb/shellrd/.shellr_secret"
 DEFAULT_LOG_PATH: str = "/sdcard/shellr.log"
 DEFAULT_TIMEOUT: int = 30
 
@@ -116,8 +229,11 @@ MAX_FILE_READ_BYTES: int = 1_048_576   # 1 MiB cap on a single read
 TAILNET_CIDR: str | None = "100.64.0.0/10"
 
 # File ops whitelist: paths under these roots are allowed.
+# /data/adb/shellrd is the canonical home on rooted phones — this is
+# the ONLY allowed root for shellrd state. /sdcard and /data/local/tmp
+# are scratch spaces for file read/write/atomic rename operations.
 ALLOWED_ROOTS: tuple[str, ...] = (
-    "/data/local/tmp/shellrd",
+    "/data/adb/shellrd",
     "/sdcard",
     "/data/local/tmp",
 )
@@ -460,7 +576,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from shellr.crypto import verify as hmac_verify
 
 log = logging.getLogger("shellrd.http")
 
@@ -479,7 +594,6 @@ def build_server(
     check_tailnet: bool,
 ):
     """Load the secret, wire up the handler, return an unstarted server."""
-    from shellr.daemon.logging import setup_logging
     setup_logging(log_path)
 
     secret = _load_secret(secret_path)
@@ -499,7 +613,6 @@ def build_server(
 
 
 def _format_allowed_roots() -> str:
-    from shellr.daemon.config import ALLOWED_ROOTS
     return ", ".join(ALLOWED_ROOTS)
 
 
@@ -595,7 +708,7 @@ def _make_handler(*, secret: bytes, dispatch, check_tailnet: bool):
 
             # Verify HMAC
             sig = self.headers.get("X-Shellr-Signature", "")
-            if not hmac_verify(secret, body, sig):
+            if not verify(secret, body, sig):
                 log.warning("HMAC mismatch from %s — body=%d bytes sig=%s...",
                             self.client_address[0], len(body), sig[:8])
                 return self._write_json(401, {
@@ -686,7 +799,7 @@ Module layout:
 Run with::
 
     python -m shellr.daemon --host 100.x.y.z --port 7777 \\
-        --secret /data/local/tmp/shellrd/.shellr_secret
+        --secret /data/adb/shellrd/.shellr_secret
 """
 
 
@@ -767,10 +880,10 @@ cat > "$SERVICE_D/shellrd.sh" <<'AUTOSTART_EOF'
 #!/system/bin/sh
 # shellrd auto-start — Tailscale-aware, IP-change-aware, idempotent.
 
-DAEMON=/data/local/tmp/shellrd/shellrd.py
-SECRET=/data/local/tmp/shellrd/.shellr_secret
+DAEMON=/data/adb/shellrd/shellrd.py
+SECRET=/data/adb/shellrd/.shellr_secret
 LOG=/sdcard/shellr.log
-IP_CACHE=/data/local/tmp/shellrd/.last_ip
+IP_CACHE=/data/adb/shellrd/.last_ip
 FALLBACK=100.111.121.72
 BOOT_WAIT=300
 POLL_INTERVAL=5
@@ -930,10 +1043,10 @@ cat <<DONE
   (`tailscale status` should list 'nimits-a51' as online).
 
   Files now on the phone:
-    /data/local/tmp/shellrd/shellrd.py       (chmod 700)
-    /data/local/tmp/shellrd/.shellr_secret   (chmod 600)
-    /data/adb/service.d/shellrd.sh           (chmod 755)
-    /sdcard/shellr.log                       (chmod 644, append-only)
+    /data/adb/shellrd/shellrd.py          (chmod 700)
+    /data/adb/shellrd/.shellr_secret      (chmod 600)
+    /data/adb/service.d/shellrd.sh        (chmod 755)
+    /sdcard/shellr.log                    (chmod 644, append-only)
 
   Audit trail:
     adb shell 'tail -f /sdcard/shellr.log'    # live RPC log

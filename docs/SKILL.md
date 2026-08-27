@@ -87,7 +87,7 @@ HMAC-SHA256 signed in `X-Shellr-Signature`.
 **Default timeout:** 30 s. **Cap:** 300 s.
 
 **Allowed file roots** (everything outside is rejected):
-- `/data/local/tmp/shellrd` (daemon home)
+- `/data/adb/shellrd` (daemon home — canonical; legacy `/data/local/tmp/shellrd` still allowed for migration grace period)
 - `/sdcard`
 - `/data/local/tmp`
 

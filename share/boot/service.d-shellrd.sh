@@ -16,10 +16,13 @@
 
 set -eu
 
-DAEMON="/data/local/tmp/shellrd/shellrd.py"
-SECRET="/data/local/tmp/shellrd/.shellr_secret"
+# Canonical home for shellrd on rooted phones (KernelSU convention).
+# /data/adb/shellrd is the only canonical location; /data/local/tmp/shellrd
+# is no longer listed in ALLOWED_ROOTS.
+DAEMON="/data/adb/shellrd/shellrd.py"
+SECRET="/data/adb/shellrd/.shellr_secret"
 LOG="/sdcard/shellr.log"
-IP_CACHE="/data/local/tmp/shellrd/.last_ip"
+IP_CACHE="/data/adb/shellrd/.last_ip"
 FALLBACK="100.111.121.72"
 BOOT_WAIT=300
 POLL_INTERVAL=5
@@ -74,8 +77,11 @@ echo "$CURRENT_IP" > "$IP_CACHE" 2>/dev/null
 echo "[shellrd] starting on $CURRENT_IP"
 
 # Inherit PATH so subprocess.Popen inside the daemon finds python3, nmap, etc.
+# IMPORTANT: pass --host and --secret explicitly. Newer builds of shellrd
+# require --host (default is "must specify Tailscale IP") and --secret
+# so the daemon knows where to load the pre-shared key.
 ( setsid env PATH="$PATH" PYTHONHOME="$PYTHONHOME" \
-    python3 "$DAEMON" \
+    python3 "$DAEMON" --host "$CURRENT_IP" --secret "$SECRET" \
     > "$LOG" 2>&1 < /dev/null & )
 
 sleep 2

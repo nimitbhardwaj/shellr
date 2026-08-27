@@ -7,9 +7,9 @@
 #
 # What it does:
 #   1. preflight: must be root + service.d present + Termux python3
-#   2. writes /data/local/tmp/shellrd/shellrd.py          (bundled daemon)
-#   3. writes /data/local/tmp/shellrd/.shellr_secret      (HMAC key)
-#   4. writes /data/adb/service.d/shellrd.sh              (autostart)
+#   2. writes /data/adb/shellrd/shellrd.py             (bundled daemon, canonical)
+#   3. writes /data/adb/shellrd/.shellr_secret         (HMAC key)
+#   4. writes /data/adb/service.d/shellrd.sh           (autostart)
 #   5. starts the daemon
 #   6. prints the Tailscale IP + HMAC secret + control commands
 #
@@ -19,7 +19,9 @@
 set -eu
 
 INSTALLER_VERSION="0.2.0"
-PHONE_HOME="/data/local/tmp/shellrd"
+# Canonical home for shellrd on rooted phones is /data/adb/shellrd
+# (KernelSU / Magisk convention — see ALLOWED_ROOTS in config.py).
+PHONE_HOME="/data/adb/shellrd"
 SERVICE_D="/data/adb/service.d"
 
 banner() { printf '\n=== %s ===\n' "$*"; }
@@ -76,10 +78,10 @@ cat > "$SERVICE_D/shellrd.sh" <<'AUTOSTART_EOF'
 #!/system/bin/sh
 # shellrd auto-start — Tailscale-aware, IP-change-aware, idempotent.
 
-DAEMON=/data/local/tmp/shellrd/shellrd.py
-SECRET=/data/local/tmp/shellrd/.shellr_secret
+DAEMON=/data/adb/shellrd/shellrd.py
+SECRET=/data/adb/shellrd/.shellr_secret
 LOG=/sdcard/shellr.log
-IP_CACHE=/data/local/tmp/shellrd/.last_ip
+IP_CACHE=/data/adb/shellrd/.last_ip
 FALLBACK=100.111.121.72
 BOOT_WAIT=300
 POLL_INTERVAL=5
@@ -239,10 +241,10 @@ cat <<DONE
   (`tailscale status` should list 'nimits-a51' as online).
 
   Files now on the phone:
-    /data/local/tmp/shellrd/shellrd.py       (chmod 700)
-    /data/local/tmp/shellrd/.shellr_secret   (chmod 600)
-    /data/adb/service.d/shellrd.sh           (chmod 755)
-    /sdcard/shellr.log                       (chmod 644, append-only)
+    /data/adb/shellrd/shellrd.py          (chmod 700)
+    /data/adb/shellrd/.shellr_secret      (chmod 600)
+    /data/adb/service.d/shellrd.sh        (chmod 755)
+    /sdcard/shellr.log                    (chmod 644, append-only)
 
   Audit trail:
     adb shell 'tail -f /sdcard/shellr.log'    # live RPC log

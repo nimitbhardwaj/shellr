@@ -9,7 +9,7 @@ from __future__ import annotations
 # Bind defaults — refuse to start without an explicit --host.
 DEFAULT_HOST: str | None = None
 DEFAULT_PORT: int = 7777
-DEFAULT_SECRET_PATH: str = "/data/local/tmp/shellrd/.shellr_secret"
+DEFAULT_SECRET_PATH: str = "/data/adb/shellrd/.shellr_secret"
 DEFAULT_LOG_PATH: str = "/sdcard/shellr.log"
 DEFAULT_TIMEOUT: int = 30
 
@@ -25,8 +25,11 @@ MAX_FILE_READ_BYTES: int = 1_048_576   # 1 MiB cap on a single read
 TAILNET_CIDR: str | None = "100.64.0.0/10"
 
 # File ops whitelist: paths under these roots are allowed.
+# /data/adb/shellrd is the canonical home on rooted phones — this is
+# the ONLY allowed root for shellrd state. /sdcard and /data/local/tmp
+# are scratch spaces for file read/write/atomic rename operations.
 ALLOWED_ROOTS: tuple[str, ...] = (
-    "/data/local/tmp/shellrd",
+    "/data/adb/shellrd",
     "/sdcard",
     "/data/local/tmp",
 )
