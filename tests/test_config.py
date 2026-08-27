@@ -18,8 +18,13 @@ def test_tailnet_cidr_is_tailscale_ipv4():
 
 def test_allowed_roots_includes_phone_home():
     roots = " ".join(config.ALLOWED_ROOTS)
-    assert "/data/local/tmp/shellrd" in roots
+    # Canonical home must always be present.
+    assert "/data/adb/shellrd" in roots
+    # /sdcard and /data/local/tmp are the scratch spaces for file ops.
     assert "/sdcard" in roots
+    # Legacy /data/local/tmp/shellrd is no longer a fallback — phones
+    # should use the canonical /data/adb/shellrd path.
+    assert "/data/local/tmp/shellrd" not in roots
 
 
 def test_destructive_patterns_blocked():

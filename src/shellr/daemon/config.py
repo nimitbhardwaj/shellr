@@ -25,12 +25,11 @@ MAX_FILE_READ_BYTES: int = 1_048_576   # 1 MiB cap on a single read
 TAILNET_CIDR: str | None = "100.64.0.0/10"
 
 # File ops whitelist: paths under these roots are allowed.
-# /data/adb/shellrd is the canonical home on rooted phones; we also
-# keep legacy /data/local/tmp/shellrd for backward compatibility with
-# installs that pre-date the migration.
+# /data/adb/shellrd is the canonical home on rooted phones — this is
+# the ONLY allowed root for shellrd state. /sdcard and /data/local/tmp
+# are scratch spaces for file read/write/atomic rename operations.
 ALLOWED_ROOTS: tuple[str, ...] = (
     "/data/adb/shellrd",
-    "/data/local/tmp/shellrd",
     "/sdcard",
     "/data/local/tmp",
 )

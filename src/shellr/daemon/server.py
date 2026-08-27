@@ -17,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from shellr.crypto import verify as hmac_verify
+from shellr.crypto import verify
 from shellr.daemon.exec import _make_dispatch, tailnet_check
 from shellr.daemon.config import MAX_REQUEST_BYTES
 
@@ -154,7 +154,7 @@ def _make_handler(*, secret: bytes, dispatch, check_tailnet: bool):
 
             # Verify HMAC
             sig = self.headers.get("X-Shellr-Signature", "")
-            if not hmac_verify(secret, body, sig):
+            if not verify(secret, body, sig):
                 log.warning("HMAC mismatch from %s — body=%d bytes sig=%s...",
                             self.client_address[0], len(body), sig[:8])
                 return self._write_json(401, {

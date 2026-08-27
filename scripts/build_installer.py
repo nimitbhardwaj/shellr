@@ -30,17 +30,28 @@ def _read_modules() -> list[tuple[str, str, str]]:
     Modules don't actually ``import`` anything at runtime — the
     server module embeds all the helpers — so order is presentation
     only, but it's nicer to read top-down.
+
+    NOTE: shellr.crypto and shellr.resolve are top-level modules in
+    src/shellr/ (sibling of shellr.daemon), and daemon/__init__.py
+    imports from them. They must be included in the monolith OR the
+    `from shellr.crypto import verify` line will fail with
+    ModuleNotFoundError. We include them as separate sections so
+    the daemon is fully self-contained.
     """
+    # Order matters: dependencies first, then consumers.
+    # Toplevel utility modules first, then daemon.
     files = [
-        "config.py",
-        "logging.py",
-        "exec.py",
-        "server.py",
-        "__init__.py",
+        "../crypto.py",         # shellr.crypto (imported by daemon/__init__.py)
+        "../resolve.py",         # shellr.resolve (imported by daemon)
+        "config.py",            # shellr.daemon.config
+        "logging.py",           # shellr.daemon.logging
+        "exec.py",              # shellr.daemon.exec
+        "server.py",            # shellr.daemon.server
+        "__init__.py",          # shellr.daemon (main, has imports)
     ]
     out = []
     for fn in files:
-        p = DAEMON_MOD / fn
+        p = (DAEMON_MOD / fn).resolve()
         out.append((fn, str(p), p.read_text(encoding="utf-8")))
     return out
 
@@ -86,12 +97,14 @@ def _make_monolith() -> str:
         # Strip the `from __future__ import annotations` line (only allowed
         # at top of a module).
         cleaned = content.replace("from __future__ import annotations\n", "")
-        # Strip `from shellr.daemon.X import ...` lines, including the
-        # multi-line parenthesised form. Match the opening line plus any
-        # continuation lines that are just a comma-separated list, until
-        # the closing `)`.
+        # Strip `from shellr.daemon.X import ...` lines — these are
+        # cross-module references inside the daemon package; in the
+        # monolith all symbols live in one namespace.
+        # IMPORTANT: match optional leading whitespace (4 spaces for
+        # function-body imports like `from shellr.daemon.logging import
+        # setup_logging` that lives inside build_server()).
         cleaned = re.sub(
-            r"^from shellr\.daemon\.[a-z_]+ import \(\n"
+            r"^[ \t]*from shellr\.daemon\.[a-z_]+ import \(\n"
             r"(?:[ \t]*[\w_,\n]+)+"
             r"[ \t]*\)\n",
             "",
@@ -100,13 +113,38 @@ def _make_monolith() -> str:
         )
         # And the single-line variant.
         cleaned = re.sub(
-            r"^from shellr\.daemon\.[a-z_]+ import [^\n]+\n",
+            r"^[ \t]*from shellr\.daemon\.[a-z_]+ import [^\n]+\n",
+            "",
+            cleaned,
+            flags=re.MULTILINE,
+        )
+        # Also strip `from shellr.crypto import ...` and
+        # `from shellr.resolve import ...` — top-level utilities
+        # are bundled at the top of the monolith, so their symbols
+        # are already in scope. Same indentation handling.
+        cleaned = re.sub(
+            r"^[ \t]*from shellr\.(crypto|resolve) import [^\n]+\n",
+            "",
+            cleaned,
+            flags=re.MULTILINE,
+        )
+        # Same for `from shellr.crypto/resolve import (...)` multiline
+        cleaned = re.sub(
+            r"^[ \t]*from shellr\.(crypto|resolve) import \(\n"
+            r"(?:[ \t]*[\w_,\n]+)+"
+            r"[ \t]*\)\n",
             "",
             cleaned,
             flags=re.MULTILINE,
         )
         parts.append(cleaned)
         parts.append("\n")
+
+    # NOTE: `from X import Y as Z` aliases used to be a problem here because
+    # we stripped the imports. server.py has been refactored to use the
+    # direct name (`verify` not `hmac_verify`), so no alias re-injection
+    # is needed. If a future refactor reintroduces `as`-aliases inside
+    # function bodies, add them here.
 
     return "".join(parts)
 
