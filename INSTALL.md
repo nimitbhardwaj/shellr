@@ -80,8 +80,8 @@ adb shell 'su -c "bash /sdcard/install.sh"'
 The installer will, in order:
 
 1. Verify root + service.d + Termux python3
-2. Write `/data/local/tmp/shellrd/shellrd.py` (bundled daemon)
-3. Write `/data/local/tmp/shellrd/.shellr_secret` (HMAC key, fresh)
+2. Write `/data/adb/shellrd/shellrd.py` (bundled daemon)
+3. Write `/data/adb/shellrd/.shellr_secret` (HMAC key, fresh)
 4. Write `/data/adb/service.d/shellrd.sh` (KernelSU autostart)
 5. Start the daemon
 6. Print the **Tailscale IP** AND the **HMAC secret** the
@@ -157,7 +157,7 @@ Both must be present; if only one is, calls fail silently.
 # Phone side
 adb shell 'rm /data/adb/service.d/shellrd.sh'
 adb shell 'pkill -f shellrd.py'
-adb shell 'rm -rf /data/local/tmp/shellrd'
+adb shell 'rm -rf /data/adb/shellrd'
 
 # Controller side
 pip uninstall shellr
@@ -178,7 +178,7 @@ Run on the phone (via ADB):
 ```bash
 adb shell 'ps -ef | grep shellrd | grep -v grep'   # is it running?
 adb shell 'cat /sdcard/shellr.log | tail -20'      # why not?
-adb shell 'cat /data/local/tmp/shellrd/.last_ip'   # what IP does it know?
+adb shell 'cat /data/adb/shellrd/.last_ip'   # what IP does it know?
 ```
 
 Then restart:
@@ -190,7 +190,7 @@ adb shell /data/adb/service.d/shellrd.sh
 
 The HMAC secrets don't match. Verify:
 ```bash
-adb shell 'cat /data/local/tmp/shellrd/.shellr_secret'   # phone
+adb shell 'cat /data/adb/shellrd/.shellr_secret'   # phone
 cat ~/.shellr_secret                                     # controller
 ```
 
@@ -201,7 +201,7 @@ newlines, which both sides strip).
 
 The daemon binary on the phone is out of date. Re-push:
 ```bash
-adb push ~/shellr/src/shellr/daemon/__init__.py /data/local/tmp/shellrd/shellrd.py
+adb push ~/shellr/src/shellr/daemon/__init__.py /data/adb/shellrd/shellrd.py
 adb shell 'pkill -f shellrd.py'
 adb shell /data/adb/service.d/shellrd.sh
 ```

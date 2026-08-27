@@ -28,19 +28,19 @@ vps_install() {
     pip install -e ".[dev]"
     echo "[vps] installed. Try: shellr --resolve"
     echo "[vps] ensure ~/.shellr_secret exists (chmod 600) — it must match"
-    echo "      /data/local/tmp/shellrd/.shellr_secret on the phone"
+    echo "      /data/adb/shellrd/.shellr_secret on the phone"
 }
 
 phone_install() {
     echo "[phone] this script is meant to be run ON THE PHONE"
     echo "[phone] Usage:  bash scripts/install.sh phone"
     echo
-    if [ ! -d /data/local/tmp/shellrd ]; then
-        echo "[phone] installing daemon to /data/local/tmp/shellrd/"
-        mkdir -p /data/local/tmp/shellrd
+    if [ ! -d /data/adb/shellrd ]; then
+        echo "[phone] installing daemon to /data/adb/shellrd/"
+        mkdir -p /data/adb/shellrd
         # Copy the daemon source
-        cp ../src/shellr/daemon/__init__.py /data/local/tmp/shellrd/shellrd.py
-        chmod 700 /data/local/tmp/shellrd/shellrd.py
+        cp ../src/shellr/daemon/__init__.py /data/adb/shellrd/shellrd.py
+        chmod 700 /data/adb/shellrd/shellrd.py
     fi
     echo "[phone] done. Run 'bash share/phone/install.sh' to set up the secret"
     echo "[phone] and the service.d autostart."

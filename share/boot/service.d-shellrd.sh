@@ -16,10 +16,13 @@
 
 set -eu
 
-DAEMON="/data/local/tmp/shellrd/shellrd.py"
-SECRET="/data/local/tmp/shellrd/.shellr_secret"
+# Canonical home for shellrd on rooted phones (KernelSU convention).
+# /data/local/tmp/shellrd is still listed in ALLOWED_ROOTS for backward
+# compatibility with older installs; new installs use /data/adb/shellrd.
+DAEMON="/data/adb/shellrd/shellrd.py"
+SECRET="/data/adb/shellrd/.shellr_secret"
 LOG="/sdcard/shellr.log"
-IP_CACHE="/data/local/tmp/shellrd/.last_ip"
+IP_CACHE="/data/adb/shellrd/.last_ip"
 FALLBACK="100.111.121.72"
 BOOT_WAIT=300
 POLL_INTERVAL=5

@@ -19,7 +19,10 @@
 set -eu
 
 INSTALLER_VERSION="0.2.0"
-PHONE_HOME="/data/local/tmp/shellrd"
+# Canonical home for shellrd on rooted phones is /data/adb/shellrd
+# (KernelSU / Magisk convention — see ALLOWED_ROOTS in config.py).
+# /data/local/tmp/shellrd is kept as a fallback for backward compatibility.
+PHONE_HOME="/data/adb/shellrd"
 SERVICE_D="/data/adb/service.d"
 
 banner() { printf '\n=== %s ===\n' "$*"; }
@@ -100,7 +103,7 @@ Override on the command line via ``--host``, ``--port``, ``--secret``,
 # Bind defaults — refuse to start without an explicit --host.
 DEFAULT_HOST: str | None = None
 DEFAULT_PORT: int = 7777
-DEFAULT_SECRET_PATH: str = "/data/local/tmp/shellrd/.shellr_secret"
+DEFAULT_SECRET_PATH: str = "/data/adb/shellrd/.shellr_secret"
 DEFAULT_LOG_PATH: str = "/sdcard/shellr.log"
 DEFAULT_TIMEOUT: int = 30
 
@@ -116,7 +119,11 @@ MAX_FILE_READ_BYTES: int = 1_048_576   # 1 MiB cap on a single read
 TAILNET_CIDR: str | None = "100.64.0.0/10"
 
 # File ops whitelist: paths under these roots are allowed.
+# /data/adb/shellrd is the canonical home on rooted phones; we also
+# keep legacy /data/local/tmp/shellrd for backward compatibility with
+# installs that pre-date the migration.
 ALLOWED_ROOTS: tuple[str, ...] = (
+    "/data/adb/shellrd",
     "/data/local/tmp/shellrd",
     "/sdcard",
     "/data/local/tmp",
@@ -686,7 +693,7 @@ Module layout:
 Run with::
 
     python -m shellr.daemon --host 100.x.y.z --port 7777 \\
-        --secret /data/local/tmp/shellrd/.shellr_secret
+        --secret /data/adb/shellrd/.shellr_secret
 """
 
 
@@ -767,10 +774,10 @@ cat > "$SERVICE_D/shellrd.sh" <<'AUTOSTART_EOF'
 #!/system/bin/sh
 # shellrd auto-start — Tailscale-aware, IP-change-aware, idempotent.
 
-DAEMON=/data/local/tmp/shellrd/shellrd.py
-SECRET=/data/local/tmp/shellrd/.shellr_secret
+DAEMON=/data/adb/shellrd/shellrd.py
+SECRET=/data/adb/shellrd/.shellr_secret
 LOG=/sdcard/shellr.log
-IP_CACHE=/data/local/tmp/shellrd/.last_ip
+IP_CACHE=/data/adb/shellrd/.last_ip
 FALLBACK=100.111.121.72
 BOOT_WAIT=300
 POLL_INTERVAL=5

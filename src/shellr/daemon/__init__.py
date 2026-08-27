@@ -15,7 +15,7 @@ Module layout:
 Run with::
 
     python -m shellr.daemon --host 100.x.y.z --port 7777 \\
-        --secret /data/local/tmp/shellrd/.shellr_secret
+        --secret /data/adb/shellrd/.shellr_secret
 """
 
 from __future__ import annotations
